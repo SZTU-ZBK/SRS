@@ -1,0 +1,10 @@
+name: srs-service
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.12
+  - ffmpeg>=7,<9
+  - pip
+  - pip:
+      - PySide6==6.8.3

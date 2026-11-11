@@ -1,0 +1,8 @@
+.conda/
+.conda-cache/
+__pycache__/
+*.pyc
+runtime/
+tools/srs/
+tools/downloads/
+.mp4
