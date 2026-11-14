@@ -25,6 +25,8 @@ class ProcessRegistry:
             process = subprocess.Popen(
                 command, cwd=cwd, stdin=subprocess.PIPE if stdin else subprocess.DEVNULL,
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0,
+                # Let the GUI handle terminal signals and stop its own children.
+                start_new_session=os.name == "posix",
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
             )
             self._children.add(process)

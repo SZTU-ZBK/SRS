@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import queue
+import signal
 import socket
 import sys
 import threading
@@ -398,5 +399,27 @@ def main() -> int:
     application.setFont(QFont("Microsoft YaHei UI", 9))
     window = MainWindow()
     application.aboutToQuit.connect(window.manager.close)
+    shutdown_requested = False
+
+    def request_shutdown(_signum, _frame):
+        nonlocal shutdown_requested
+        shutdown_requested = True
+
+    def close_if_requested():
+        if shutdown_requested:
+            shutdown_timer.stop()
+            window.close()
+
+    shutdown_timer = QTimer(window)
+    shutdown_timer.timeout.connect(close_if_requested)
+    shutdown_timer.start(100)
+    previous_handlers = {
+        sig: signal.signal(sig, request_shutdown)
+        for sig in (signal.SIGINT, signal.SIGTERM)
+    }
     window.show()
-    return application.exec()
+    try:
+        return application.exec()
+    finally:
+        for sig, handler in previous_handlers.items():
+            signal.signal(sig, handler)
