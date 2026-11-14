@@ -17,15 +17,17 @@ python3 -m venv .venv
 选择 IP `127.0.0.1` 和端口 `1935`，点击「启动服务」。该 IP 使 SRS 仅监听回环地址。
 摄像头在板端，结果预览订阅 `/live/alertgateway`，原始预览等待主机文件发布。
 
-Ubuntu 启动界面时会自动运行本机 MQTT Broker（`127.0.0.1:18830`），页面底部的「运行日志 / MQTT 检测消息」显示 `desk/#` 的消息。在主机另开终端启动板端程序，并转发 RTMP 和 MQTT 两个端口。
+Ubuntu 启动界面时会自动运行本机 MQTT Broker（`127.0.0.1:18830`），页面底部的「运行日志 / MQTT 检测消息」显示 `desk/#` 的消息。在主机另开终端，通过 SSH 登录板端并建立 RTMP 与 MQTT 转发：
 
 ```bash
-ssh -t -o ExitOnForwardFailure=yes \
+ssh -o ExitOnForwardFailure=yes \
   -R 127.0.0.1:1935:127.0.0.1:1935 \
   -R 127.0.0.1:18830:127.0.0.1:18830 \
-  root@10.34.39.99 \
-  'cd /tmp/alertgateway-1080p && LD_LIBRARY_PATH=./lib ./AlertGateway config_srs_gui.json'
+  root@10.34.39.99
 ```
+
+登录后在板端执行 `/tmp/alertgateway-1080p/start.sh`。按 `Ctrl+C` 停止板端程序。
+该脚本的源文件是 AlertGateway 项目中的 `start-board.sh`，恢复部署包时将它上传为 `start.sh`。
 
 联调配置使用 USB 摄像头 `/dev/video-usbcamera0`、YUYV 640×480@30，并推送到
 `rtmp://127.0.0.1:1935/live/alertgateway`。配置副本在本机
