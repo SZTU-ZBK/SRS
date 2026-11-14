@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import queue
 import socket
@@ -18,6 +19,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBo
     QSplitter, QVBoxLayout, QWidget)
 
 from .backend import Channel, Manager
+from .mqtt import DetectionReceiver
 from .media import ROOT, RESULT_PATH, SOURCE_PATH, PublishOptions, find_tool, parse_resolution, stream_url, validate_address
 
 
@@ -82,6 +84,9 @@ class MainWindow(QMainWindow):
     def __init__(self, settings_path: Path | None = None) -> None:
         super().__init__()
         self.manager = Manager()
+        self.mqtt = DetectionReceiver(self.manager.logs) if sys.platform.startswith("linux") else None
+        if self.mqtt:
+            self.mqtt.start()
         self._closing = False
         self._closed = threading.Event()
         self._publisher_stopping = False
@@ -154,7 +159,7 @@ class MainWindow(QMainWindow):
         self.tool_buttons: list[QPushButton] = []
         for row, (name, label) in enumerate((("srs", "SRS"), ("ffmpeg", "FFmpeg"), ("ffprobe", "ffprobe"))):
             edit = QLineEdit()
-            edit.setPlaceholderText(f"自动查找 {name}.exe")
+            edit.setPlaceholderText(f"自动查找 {name}")
             self.tool_paths[name] = edit
             button = QPushButton("浏览…")
             self.tool_buttons.append(button)
@@ -206,7 +211,7 @@ class MainWindow(QMainWindow):
         preview_layout.addWidget(self.source_pane)
         preview_layout.addWidget(self.result_pane)
         splitter.addWidget(previews)
-        logs_group = QGroupBox("运行日志")
+        logs_group = QGroupBox("运行日志 / MQTT 检测消息")
         log_layout = QVBoxLayout(logs_group)
         self.logs = QPlainTextEdit()
         self.logs.setReadOnly(True)
@@ -250,7 +255,7 @@ class MainWindow(QMainWindow):
             self.file.setText(file)
 
     def _choose_tool(self, name: str) -> None:
-        file, _ = QFileDialog.getOpenFileName(self, f"选择 {name}", str(ROOT), "程序 (*.exe);;所有文件 (*)")
+        file, _ = QFileDialog.getOpenFileName(self, f"选择 {name}", str(ROOT), "程序 (*.exe);;所有文件 (*)" if os.name == "nt" else "所有文件 (*)")
         if file:
             self.tool_paths[name].setText(file)
 
@@ -260,11 +265,12 @@ class MainWindow(QMainWindow):
 
     def _start_service(self) -> None:
         try:
-            validate_address(self.ip.currentText(), self.port.value())
+            ip = validate_address(self.ip.currentText(), self.port.value())
             executable, ffmpeg = self._tool("srs"), self._tool("ffmpeg")
             self._tool("ffprobe")
             self._save_settings()
-            self.manager.start_service(executable, ffmpeg, self.port.value())
+            bind_host = "127.0.0.1" if ip == "127.0.0.1" else "0.0.0.0"
+            self.manager.start_service(executable, ffmpeg, self.port.value(), bind_host)
             self._refresh()
         except (ValueError, OSError) as exc:
             self._error(exc)
@@ -376,6 +382,8 @@ class MainWindow(QMainWindow):
 
         def cleanup() -> None:
             try:
+                if self.mqtt:
+                    self.mqtt.close()
                 self.manager.close()
             finally:
                 self._closed.set()

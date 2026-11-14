@@ -1,8 +1,39 @@
 # SRS 视频链路管理
 
-Windows 电脑端程序：Python / PySide6 管理界面 + 独立 SRS RTMP 服务进程 + FFmpeg 发布与解码。板端负责检测及自身重连。
+Ubuntu / Windows 电脑端程序：Python / PySide6 管理界面 + 独立 SRS RTMP 服务进程 + FFmpeg 发布与解码。板端负责检测及自身重连。
 
-## 在这台电脑运行
+## Ubuntu 启动与板端摄像头联调
+
+需要 Python 3.12、FFmpeg（含 `ffprobe`）和 Ubuntu x86_64 版 SRS。将 Linux 的
+`srs` 可执行文件放在 `tools/srs/objs/srs`，或在界面中选择其路径。本机已放入
+SRS 6.0.195。
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install PySide6-Essentials==6.8.3 amqtt==0.12.2
+./start.sh
+```
+
+选择 IP `127.0.0.1` 和端口 `1935`，点击「启动服务」。该 IP 使 SRS 仅监听回环地址。
+摄像头在板端，结果预览订阅 `/live/alertgateway`，原始预览等待主机文件发布。
+
+Ubuntu 启动界面时会自动运行本机 MQTT Broker（`127.0.0.1:18830`），页面底部的「运行日志 / MQTT 检测消息」显示 `desk/#` 的消息。在主机另开终端启动板端程序，并转发 RTMP 和 MQTT 两个端口。
+
+```bash
+ssh -t -o ExitOnForwardFailure=yes \
+  -R 127.0.0.1:1935:127.0.0.1:1935 \
+  -R 127.0.0.1:18830:127.0.0.1:18830 \
+  root@10.34.39.99 \
+  'cd /tmp/alertgateway-1080p && LD_LIBRARY_PATH=./lib ./AlertGateway config_srs_gui.json'
+```
+
+联调配置使用 USB 摄像头 `/dev/video-usbcamera0`、YUYV 640×480@30，并推送到
+`rtmp://127.0.0.1:1935/live/alertgateway`。配置副本在本机
+`runtime/alertgateway-usb.json`。板端测试包保存在 `/tmp`，重启后如被清理，
+可从 AlertGateway 的 `build-rk3588-1080p` 恢复可执行文件、`lib/` 与 `model/`，
+并将联调配置上传为 `config_srs_gui.json`。
+
+## Windows 启动
 
 Conda 环境名称为 `srs-service`，在本机位于 `C:\Users\30683\miniconda3\envs\srs-service`。SRS 位于项目的 `tools/srs`。在项目目录执行：
 
@@ -28,7 +59,7 @@ SRS 固定使用官方 Windows 原生发行包 **v8.0-d3**（8.0 开发系列）
 
 ## 操作顺序
 
-1. 选择电脑供板端访问的局域网 IPv4 地址，端口默认 `1935`。程序始终绑定 `0.0.0.0`；此处填写的 IP 用于生成板端地址。多网卡机器请核对 IP。
+1. 选择电脑供板端访问的局域网 IPv4 地址，端口默认 `1935`。选择 `127.0.0.1` 时只监听回环地址，选择局域网 IP 时监听 `0.0.0.0`。填写的 IP 用于生成板端地址。多网卡机器请核对 IP。
 2. 点击“启动服务”，等待服务状态显示运行中。两个预览会开始等待对应的发布者。
 3. 选择视频，设置推流分辨率、帧率和转码码率，点击“开始推流”。
 4. 原始窗口显示画面后，再手动启动板端程序。

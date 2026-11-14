@@ -6,3 +6,5 @@ runtime/
 tools/srs/
 tools/downloads/
 .mp4
+
+.venv/

@@ -146,9 +146,11 @@ def check_port_available(port: int) -> None:
 
 class ServiceWorker(Worker):
     def __init__(self, registry, logs, channel, executable: str, port: int,
-                 on_ready: Callable[[], None], on_exit: Callable[[], None]) -> None:
+                 on_ready: Callable[[], None], on_exit: Callable[[], None],
+                 bind_host: str = "0.0.0.0") -> None:
         super().__init__(registry, logs, "RTMP服务", channel)
         self.executable, self.port = executable, port
+        self.bind_host = bind_host
         self.on_ready, self.on_exit = on_ready, on_exit
 
     def run(self) -> None:
@@ -159,7 +161,7 @@ class ServiceWorker(Worker):
             runtime = ROOT / "runtime"
             runtime.mkdir(parents=True, exist_ok=True)
             config = runtime / "srs.conf"
-            config.write_text(srs_config(self.port), encoding="utf-8")
+            config.write_text(srs_config(self.port, self.bind_host), encoding="utf-8")
             executable = Path(self.executable)
             cwd = executable.parent.parent if executable.parent.name == "objs" else executable.parent
             if self.stop_event.is_set():
@@ -179,8 +181,8 @@ class ServiceWorker(Worker):
                         raise RuntimeError("服务启动超时，未检测到 RTMP 监听端口。")
                     self.stop_event.wait(0.1)
             if not self.stop_event.is_set():
-                self.channel.update(text=f"运行中 · 0.0.0.0:{self.port}", ready=True)
-                self.log(f"服务已就绪，PID={self.process.pid}，监听 0.0.0.0:{self.port}")
+                self.channel.update(text=f"运行中 · {self.bind_host}:{self.port}", ready=True)
+                self.log(f"服务已就绪，PID={self.process.pid}，监听 {self.bind_host}:{self.port}")
                 self.on_ready()
                 while not self.stop_event.wait(0.2):
                     if self.process.poll() is not None:
@@ -342,7 +344,7 @@ class Manager:
         self.closing = threading.Event()
         self.cleanup_thread: threading.Thread | None = None
 
-    def start_service(self, executable: str, ffmpeg: str, port: int) -> None:
+    def start_service(self, executable: str, ffmpeg: str, port: int, bind_host: str = "0.0.0.0") -> None:
         with self._lock:
             if self.closing.is_set() or self.stopping.is_set():
                 raise ValueError("正在停止，请稍候。")
@@ -352,7 +354,7 @@ class Manager:
                 raise ValueError("旧预览尚未结束，请稍后重新启动。")
             self.port, self.ffmpeg = port, ffmpeg
             self.server_worker = ServiceWorker(self.registry, self.logs, self.service,
-                                               executable, port, self._ready, self._server_exit)
+                                               executable, port, self._ready, self._server_exit, bind_host)
             self.server_worker.start()
 
     def _ready(self) -> None:
